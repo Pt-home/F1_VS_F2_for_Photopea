@@ -291,3 +291,52 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   window.addEventListener("DOMContentLoaded", kickoff, { once: true });
   window.addEventListener("load", kickoff, { once: true });
 }
+
+// ---- Photopea export wiring  ----
+
+// Read sessionId from URL (if opened by the Photopea plugin)
+function getSessionIdFromURL() {
+  try {
+    const u = new URL(window.location.href);
+    return u.searchParams.get("sessionId");
+  } catch { return null; }
+}
+const sessionId = getSessionIdFromURL();
+
+// Export button
+const btnExportPhotopea = document.getElementById("export_photopea");
+if (btnExportPhotopea) {
+  btnExportPhotopea.addEventListener("click", async () => {
+    try {
+      if (!window.opener) {
+        alert("Open this generator from the Photopea plugin to export directly.");
+        return;
+      }
+      const titleEl = document.getElementById("title");
+      const name = ((titleEl && titleEl.value) ? titleEl.value : "F1_vs_F2")
+        .replace(/[^\w\-.]+/g, "_") + ".png";
+
+      // Create PNG as ArrayBuffer
+      const ab = await new Promise((resolve, reject) => {
+        if (!canvas) return reject(new Error("Canvas not found"));
+        canvas.toBlob(async (blob) => {
+          if (!blob) return reject(new Error("Failed to capture PNG"));
+          const buf = await blob.arrayBuffer();
+          resolve(buf);
+        }, "image/png");
+      });
+
+      // Post to plugin panel
+      window.opener.postMessage({
+        type: "f1vsf2-export",
+        sessionId: sessionId,         // required to match plugin tab
+        mime: "image/png",
+        name,
+        data: ab
+      }, "*", [ab]);
+    } catch (e) {
+      alert("Export failed: " + (e.message || e));
+    }
+  });
+}
+
