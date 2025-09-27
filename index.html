@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>F1_vs_F2 Playground</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --panel:#f5f5f7; --line:#e6e6ea; }
+    * { box-sizing:border-box }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#111; }
+    .layout { display:flex; min-height:100vh; }
+    aside { width:360px; max-width:92vw; background:var(--panel); border-right:1px solid var(--line); padding:16px; overflow:auto; }
+    main { flex:1; display:flex; flex-direction:column; }
+    header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
+    header h1 { font-size:18px; margin:0; }
+    .content { padding:16px; }
+    .stage { display:flex; gap:16px; align-items:flex-start; }
+    .viewer { flex:2; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; justify-content:center; }
+    canvas { width:min(100%, 80vh); aspect-ratio:1 / 1; height:auto; display:block; border-radius:10px; background:#fff; }
+    .sidebox { flex:1; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; }
+    section { margin-bottom:16px; }
+    section h3 { margin:10px 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:#444; }
+    label { font-size:13px; display:block; margin:6px 0 2px; }
+    input[type="text"], textarea, select, input[type="number"] { width:100%; padding:8px; border:1px solid #d0d0d5; border-radius:8px; background:#fff; font:inherit; }
+    textarea { min-height:64px; }
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1; }
+    button { padding:8px 10px; border-radius:10px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    .code { white-space:pre-wrap; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; background:#fafafa; border:1px solid var(--line); padding:8px; border-radius:8px; max-height:240px; overflow:auto; }
+    input[type="color"]{ width:48px; height:32px; padding:0; border:1px solid #d0d0d5; border-radius:8px; background:transparent; cursor:pointer; }
+    input[type="color"]::-webkit-color-swatch-wrapper{ padding:2px; border-radius:8px; }
+    input[type="color"]::-webkit-color-swatch{ border:1px solid #c8c8cc; border-radius:6px; }
+    input[type="color"]::-moz-color-swatch{ border:1px solid #c8c8cc; border-radius:6px; }
+    .checkline { display:flex; align-items:center; gap:8px; margin-top:8px; cursor:pointer; user-select:none; }
+    .checkline input { margin:0; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <section>
+        <h3>Mode &amp; Meta</h3>
+        <label for="gen_mode">Generation mode</label>
+        <select id="gen_mode" name="gen_mode">
+          <option>F1_VS_F2</option><option>F2_VS_F1</option>
+          <option>F1_VS_INDEX</option><option>F2_VS_INDEX</option>
+          <option>INDEX_VS_F1</option><option>INDEX_VS_F2</option>
+          <option>F1_VS_X1</option><option>F1_VS_X2</option>
+          <option>F2_VS_X1</option><option>F2_VS_X2</option>
+          <option>X1_VS_F1</option><option>X1_VS_F2</option>
+          <option>X2_VS_F1</option><option>X2_VS_F2</option>
+          <option>F1F2_VS_F1</option><option>F1F2_VS_F2</option>
+          <option>F1_VS_F1F2</option><option>F2_VS_F1F2</option>
+          <option>RANDOM</option>
+        </select>
+        <label for="title">Title</label>
+        <input id="title" name="title" type="text" value="F1_vs_F2 Web Playground"/>
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes"></textarea>
+        <label class="checkline" for="exact_toggle">
+          <input id="exact_toggle" name="exact_toggle" type="checkbox"/>
+          <span>Exact render always</span>
+        </label>
+      </section>
+
+      <section>
+        <h3>Functions</h3>
+        <label for="f1">f1(x,y)</label>
+        <textarea id="f1" name="f1">x**2 - y**2</textarea>
+        <label for="f2">f2(x,y)</label>
+        <textarea id="f2" name="f2">2*x + y</textarea>
+        <div class="row">
+          <div>
+            <label for="func_seed">Function seed</label>
+            <input id="func_seed" name="func_seed" type="number" value="12345"/>
+          </div>
+          <div>
+            <label for="points_seed">Points seed</label>
+            <input id="points_seed" name="points_seed" type="number" value="777"/>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Space</h3>
+        <div class="row">
+          <div>
+            <label for="space_mode">Sampling</label>
+            <select id="space_mode" name="space_mode">
+              <option value="grid">grid</option><option value="random">random</option>
+            </select>
+          </div>
+          <div>
+            <label for="grid_phase">Grid phase</label>
+            <select id="grid_phase" name="grid_phase">
+              <option value="on_lines">on_lines</option><option value="between_lines">between_lines</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="grid_step_on">Grid step (on)</label>
+            <input id="grid_step_on" name="grid_step_on" type="number" min="0.001" step="0.001" value="0.010"/>
+          </div>
+          <div>
+            <label for="grid_step_between">Grid step (between)</label>
+            <input id="grid_step_between" name="grid_step_between" type="number" min="0.001" step="0.001" value="0.020"/>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="x_min">X min</label>
+            <input id="x_min" name="x_min" type="number" step="0.1" value="-2"/>
+          </div>
+          <div>
+            <label for="x_max">X max</label>
+            <input id="x_max" name="x_max" type="number" step="0.1" value="2"/>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="y_min">Y min</label>
+            <input id="y_min" name="y_min" type="number" step="0.1" value="-2"/>
+          </div>
+          <div>
+            <label for="y_max">Y max</label>
+            <input id="y_max" name="y_max" type="number" step="0.1" value="2"/>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="n_points">Points (random)</label>
+            <input id="n_points" name="n_points" type="number" step="1000" value="50000"/>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Render</h3>
+        <div class="row">
+          <div>
+            <label for="projection">Projection</label>
+            <select id="projection" name="projection">
+              <option>RECTILINEAR</option><option>POLAR</option><option>AITOFF</option><option>HAMMER</option><option>LAMBERT</option><option>MOLLWEIDE</option><option>RANDOM</option>
+            </select>
+          </div>
+          <div>
+            <label for="marker">Marker</label>
+            <select id="marker" name="marker">
+              <option>POINT</option><option>PIXEL</option><option selected>CIRCLE</option><option>SQUARE</option><option>STAR</option><option>RANDOM</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="spot_size">Spot size (px)</label>
+            <input id="spot_size" name="spot_size" type="number" value="1" min="1" max="20"/>
+          </div>
+          <div>
+            <label for="rotation_deg">Rotation (deg)</label>
+            <input id="rotation_deg" name="rotation_deg" type="number" value="0" min="0" max="180"/>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="alpha">Alpha</label>
+            <input id="alpha" name="alpha" type="number" step="0.05" min="0" max="1" value="0.3"/>
+          </div>
+          <div>
+            <label for="dpi">DPI</label>
+            <select id="dpi" name="dpi">
+              <option>144</option><option>200</option><option selected>300</option><option>450</option><option>600</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="fg">Foreground</label>
+            <input id="fg" name="fg" type="color" value="#000000"/>
+          </div>
+          <div>
+            <label for="bg">Background</label>
+            <input id="bg" name="bg" type="color" value="#FFFFFF"/>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <main>
+      <header>
+		  <h1>F1_vs_F2 Playground</h1>
+		  <span id="status" style="font-size:12px;color:#666;margin-left:8px">Ready</span>
+		  <a href="./F1_vs_F2_Help.pdf" download
+			 style="margin-left:auto;font-size:12px;color:#0a5; text-decoration:none; border:1px solid #0a5; padding:4px 8px; border-radius:8px;">
+			Help (PDF)
+		  </a>
+		  
+		</header>
+
+      <div class="content">
+        <div class="stage">
+          <div class="viewer">
+            <canvas id="canvas" width="1600" height="1600"></canvas>
+          </div>
+
+          <div class="sidebox">
+            <h3>Export &amp; Preset</h3>
+            <div class="row">
+              <button id="save_preset" class="primary">Save preset (.json)</button>
+              <button id="download_png">Download PNG</button>
+            </div>
+            <label for="load_preset" style="margin-top:10px;">Preset JSON</label>
+            <input type="file" id="load_preset" name="load_preset" accept="application/json" />
+            <div class="code" id="cfg_preview" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
