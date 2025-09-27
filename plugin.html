@@ -36,7 +36,6 @@
       <div class="desc">Generate a pattern in a new tab and send it back as a new Photopea document.</div>
       <div class="row">
         <button id="open">Open generator</button>
-        <button id="copyLink" class="secondary" title="Use if pop-ups are blocked">Copy link</button>
       </div>
       <div class="status" id="status">Ready</div>
     </main>
@@ -70,11 +69,6 @@
       const url = buildGeneratorUrl();
       window.open(url, "_blank"); // IMPORTANT: no 'noopener' -> generator can postMessage to opener
       setStatus("Waiting for export…");
-    });
-    q("copyLink").addEventListener("click", async () => {
-      const url = buildGeneratorUrl();
-      try { await navigator.clipboard.writeText(url); setStatus("Link copied. Open it in a new tab."); }
-      catch { setStatus("Copy failed. URL: " + url); }
     });
 
     // --- Photopea reply coordination (file -> done -> set source -> done) ---
