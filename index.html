@@ -27,6 +27,7 @@
     .row > * { flex:1; }
     button { padding:8px 10px; border-radius:10px; border:1px solid var(--line); background:#fff; cursor:pointer; }
     button.primary { background:#111; color:#fff; border-color:#111; }
+	button.pp { background:#18a497; color:#fff; border-color:#0c514b; margin: 10px 0px}
     .code { white-space:pre-wrap; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; background:#fafafa; border:1px solid var(--line); padding:8px; border-radius:8px; max-height:240px; overflow:auto; }
     input[type="color"]{ width:48px; height:32px; padding:0; border:1px solid #d0d0d5; border-radius:8px; background:transparent; cursor:pointer; }
     input[type="color"]::-webkit-color-swatch-wrapper{ padding:2px; border-radius:8px; }
@@ -214,7 +215,7 @@
             <input type="file" id="load_preset" name="load_preset" accept="application/json" />
             <div class="code" id="cfg_preview" aria-live="polite"></div>
 			<div class="row">
-              <button id="export_photopea" class="primary">Export PNG to Photopea</button>
+              <button id="export_photopea" class="pp">Export PNG to Photopea</button>
             </div>
           </div>
         </div>
@@ -225,6 +226,7 @@
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
+
 
 
 
