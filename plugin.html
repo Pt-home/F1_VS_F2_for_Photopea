@@ -15,10 +15,10 @@
     }
     .wrap { height:100%; display:flex; flex-direction:column; }
     header { padding:10px 12px; border-bottom:1px solid var(--line); }
-    header h1 { margin:0; font-size:14px; font-weight:600; }
+    header h1 { margin:0; font-size:18px; font-weight:600; }
     main { padding:12px; display:flex; flex-direction:column; gap:8px; }
     .desc { color:#555; }
-    .row { display:flex; gap:8px;  }
+    .row { display:flex; gap:8px; justify-content:center; align-items:center; }
     button {
       padding:7px 10px; border-radius:8px; border:1px solid var(--line);
       background:#111; color:#fff; cursor:pointer;
@@ -34,7 +34,7 @@
     <main>
       <div class="desc">Generate a pattern in a new tab and send it back as a new Photopea document.</div>
       <div class="row">
-       <p><button id="open">Open generator</button></p>
+       <button id="open">Open generator</button>
       </div>
       <div class="status" id="status">Ready</div>
     </main>
