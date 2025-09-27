@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>F1_vs_F2 for Photopea</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --line:#e6e6ea; --panel:#fafafa; }
+    * { box-sizing: border-box; }
+    html, body { height:100%; }
+    body { margin:0; font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#fff; color:#111; }
+    .wrap { height:100%; display:flex; flex-direction:column; }
+    header { padding:10px 12px; border-bottom:1px solid var(--line); }
+    header h1 { margin:0; font-size:14px; font-weight:600; }
+    main { padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .desc { color:#555; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; }
+    button { padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:#111; color:#fff; cursor:pointer; }
+    button.secondary { background:#fff; color:#111; }
+    .status { margin-top:6px; font-size:12px; color:#666; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>F1_vs_F2 for Photopea</h1>
+    </header>
+    <main>
+      <div class="desc">Generate a pattern in a new tab and send it back as a new Photopea document.</div>
+      <div class="row">
+        <button id="open" title="Open generator in a new tab">Open generator</button>
+        <button id="copyLink" class="secondary" title="Copy generator link (use if pop-ups are blocked)">Copy link</button>
+      </div>
+      <div class="status" id="status">Ready</div>
+    </main>
+  </div>
+
+  <script>
+    // Config
+    const GENERATOR_URL   = "https://pt-home.github.io/F1_VS_F2_for_Photopea/";
+    const GENERATOR_ORIGIN = "https://pt-home.github.io";
+    const PHOTOPEA_ORIGIN  = "*"; // Photopea editor parent; keep '*' for compatibility
+
+    // State
+    let sessionId = null;
+    let lastBlobInfo = null;
+
+    // Helpers
+    function makeSessionId() {
+      const a = new Uint8Array(16);
+      crypto.getRandomValues(a);
+      return [...a].map(x => x.toString(16).padStart(2,"0")).join("");
+    }
+    function setStatus(msg) {
+      const el = document.getElementById("status");
+      if (el) el.textContent = msg;
+    }
+
+    // Open generator with sessionId
+    function buildGeneratorUrl() {
+      if (!sessionId) sessionId = makeSessionId();
+      const u = new URL(GENERATOR_URL);
+      u.searchParams.set("sessionId", sessionId);
+      return u.toString();
+    }
+
+    document.getElementById("open").addEventListener("click", () => {
+      const url = buildGeneratorUrl();
+      window.open(url, "_blank", "noopener");
+      setStatus("Waiting for export…");
+    });
+
+    document.getElementById("copyLink").addEventListener("click", async () => {
+      const url = buildGeneratorUrl();
+      try {
+        await navigator.clipboard.writeText(url);
+        setStatus("Link copied. Open it in a new tab.");
+      } catch {
+        setStatus("Copy failed. You can manually copy: " + url);
+      }
+    });
+
+    // Receive export from generator
+    window.addEventListener("message", async (ev) => {
+      try {
+        if (ev.origin !== GENERATOR_ORIGIN) return;
+        const msg = ev.data || {};
+        if (msg.type !== "f1vsf2-export") return;
+        if (!sessionId || msg.sessionId !== sessionId) {
+          setStatus("Ignored export: session mismatch");
+          return;
+        }
+
+        // Accept ArrayBuffer or base64 string
+        let arrayBuf = null;
+        if (msg.data instanceof ArrayBuffer) {
+          arrayBuf = msg.data;
+        } else if (typeof msg.data === "string") {
+          const b64 = msg.data.split(",").pop();
+          const bin = atob(b64);
+          const u8  = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          arrayBuf = u8.buffer;
+        } else {
+          setStatus("Invalid export payload");
+          return;
+        }
+
+        const name = (msg.name && String(msg.name).trim()) ? msg.name : "F1_vs_F2.png";
+        const bytes = arrayBuf.byteLength;
+        lastBlobInfo = { name, bytes };
+
+        // Forward to Photopea as a new document
+        window.parent.postMessage({
+          type: "open",
+          name,
+          data: arrayBuf
+        }, PHOTOPEA_ORIGIN, [arrayBuf]);
+
+        setStatus(`Exported to Photopea: ${name} (${Math.round(bytes/1024)} KB)`);
+      } catch (e) {
+        setStatus("Error: " + (e.message || e));
+      }
+    });
+  </script>
+</body>
+</html>
