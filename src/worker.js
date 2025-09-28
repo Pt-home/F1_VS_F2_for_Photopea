@@ -77,10 +77,10 @@ self.onmessage = async (ev) => {
     if (mode === "RANDOM") {
       const modes = [
         "F1_VS_F2","F2_VS_F1","F1_VС_INDEX","F2_VS_INDEX","INDEX_VS_F1","INDEX_VS_F2",
-        "F1_VS_X1","F1_VS_X2","F2_VS_X1","F2_VS_X2","X1_VS_F1","X1_VS_F2","X2_VS_F1","X2_VS_F2",
-        "F1F2_VS_F1","F1F2_VS_F2","F1_VS_F1F2","F2_VS_F1F2"
+        "F1_VS_X1","F1_VS_X2","F2_VS_X1","F2_VС_X2","X1_VS_F1","X1_VС_F2","X2_VS_F1","X2_VS_F2",
+        "F1F2_VS_F1","F1F2_VS_F2","F1_VS_F1F2","F2_VС_F1F2"
       ];
-      mode = modes[Math.floor(rngStyle() * list.length)];
+      mode = modes[Math.floor(rngStyle() * modes.length)];
     }
 
     const parser = new Parser({ operators: { add: true, multiply: true, divide: true, power: true, factorial: false } });
@@ -159,28 +159,44 @@ self.onmessage = async (ev) => {
   }
 };
 
-/* ----- sampling ----- */
+/* ----- sampling (single-phase grid) ----- */
 function buildXY(space, rng) {
   const xmin = Number(space.x_min), xmax = Number(space.x_max);
   const ymin = Number(space.y_min), ymax = Number(space.y_max);
 
   if ((space.mode || "grid") === "grid") {
     const phase = (space.grid_phase || "on_lines");
-    const step = Math.max(0.001, Number(phase === "between_lines"
-      ? (space.grid_step_between ?? space.grid_step)
-      : (space.grid_step_on ?? space.grid_step)));
-    const shift = phase === "between_lines" ? step / 2 : 0;
 
-    const xs = range(xmin + shift, xmax + shift, step);
-    const ys = range(ymin + shift, ymax + shift, step);
+    // choose exactly ONE step
+    const STEP_MIN = 0.001;
+    const step_on  = Number(space.grid_step_on  ?? NaN);
+    const step_bt  = Number(space.grid_step_between ?? NaN);
+    const step = Math.max(
+      STEP_MIN,
+      phase === "between_lines"
+        ? (Number.isFinite(step_bt) ? step_bt : step_on)
+        : (Number.isFinite(step_on) ? step_on : step_bt)
+    );
+
+    // half-step shift for between_lines
+    const shift = (phase === "between_lines") ? (step * 0.5) : 0.0;
+
+    const xs = rangeStepped(xmin + shift, xmax + shift, step);
+    const ys = rangeStepped(ymin + shift, ymax + shift, step);
+
     const n = xs.length * ys.length;
-
     const x = new Float64Array(n), y = new Float64Array(n);
     let k = 0;
-    for (let j = 0; j < ys.length; j++) for (let i = 0; i < xs.length; i++) { x[k] = xs[i]; y[k] = ys[j]; k++; }
+    for (let j = 0; j < ys.length; j++) {
+      const yj = ys[j];
+      for (let i = 0; i < xs.length; i++) {
+        x[k] = xs[i]; y[k] = yj; k++;
+      }
+    }
     return { x, y };
   }
 
+  // random sampling
   const n = Math.max(100, Number(space.n_points || 10000));
   const x = new Float64Array(n), y = new Float64Array(n);
   for (let i = 0; i < n; i++) {
@@ -189,7 +205,18 @@ function buildXY(space, rng) {
   }
   return { x, y };
 }
-function range(a, b, step) { const out = []; for (let t = a; t <= b; t += step) out.push(t); return out; }
+
+// deterministic stepping without FP drift; inclusive end with epsilon guard
+function rangeStepped(a, b, step) {
+  if (step <= 0) return [a];
+  const span = b - a;
+  const cnt = Math.floor(span / step + 1e-9) + 1; // number of samples
+  const out = new Array(cnt);
+  for (let i = 0; i < cnt; i++) out[i] = a + i * step;
+  // include last point if within 1/2 step from b
+  if (out[out.length - 1] + step * 0.5 < b) out.push(b);
+  return out;
+}
 
 /* ----- modes ----- */
 function computeUV(mode, x, y, f1, f2) {
@@ -204,22 +231,22 @@ function computeUV(mode, x, y, f1, f2) {
     switch (mode) {
       case "F1_VS_F2": u[i] = a; v[i] = b; break;
       case "F2_VS_F1": u[i] = b; v[i] = a; break;
-      case "F1_VS_INDEX": u[i] = a; v[i] = i; break;
-      case "F2_VS_INDEX": u[i] = b; v[i] = i; break;
+      case "F1_VС_INDEX": u[i] = a; v[i] = i; break;
+      case "F2_VС_INDEX": u[i] = b; v[i] = i; break;
       case "INDEX_VS_F1": u[i] = i; v[i] = a; break;
       case "INDEX_VS_F2": u[i] = i; v[i] = b; break;
       case "F1_VS_X1": u[i] = a; v[i] = xi; break;
       case "F1_VS_X2": u[i] = a; v[i] = yi; break;
       case "F2_VS_X1": u[i] = b; v[i] = xi; break;
-      case "F2_VS_X2": u[i] = b; v[i] = yi; break;
+      case "F2_VС_X2": u[i] = b; v[i] = yi; break;
       case "X1_VS_F1": u[i] = xi; v[i] = a; break;
-      case "X1_VS_F2": u[i] = xi; v[i] = b; break;
+      case "X1_VС_F2": u[i] = xi; v[i] = b; break;
       case "X2_VS_F1": u[i] = yi; v[i] = a; break;
       case "X2_VS_F2": u[i] = yi; v[i] = b; break;
       case "F1F2_VS_F1": u[i] = f1v[i] + f2v[i]; v[i] = f1v[i]; break;
       case "F1F2_VS_F2": u[i] = f1v[i] + f2v[i]; v[i] = f2v[i]; break;
       case "F1_VS_F1F2": u[i] = f1v[i]; v[i] = f1v[i] + f2v[i]; break;
-      case "F2_VS_F1F2": u[i] = f2v[i]; v[i] = f1v[i] + f2v[i]; break;
+      case "F2_VС_F1F2": u[i] = f2v[i]; v[i] = f1v[i] + f2v[i]; break;
       default: u[i] = a; v[i] = b; break;
     }
   }
@@ -239,6 +266,7 @@ function scaleTo(arr, lo, hi) {
   for (let i = 0; i < arr.length; i++) out[i] = lo + (arr[i] - mn) * k;
   return out;
 }
+
 function project(proj, u, v) {
   const n = u.length;
   const x = new Float64Array(n), y = new Float64Array(n);
@@ -300,6 +328,7 @@ function project(proj, u, v) {
   }
   return { x, y };
 }
+
 function fitToSquare(x, y, size, pad = 0.06) {
   let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
   for (let i = 0; i < x.length; i++) {
