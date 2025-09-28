@@ -46,6 +46,20 @@ try {
 let currentToken = 0;
 const nextToken = () => (++currentToken);
 
+/* ----- helpers for grid UI ----- */
+const STEP_MIN = 0.001;
+function clampStep(v, def=0.01) {
+  const n = Number(v);
+  return Math.max(STEP_MIN, Number.isFinite(n) ? n : def);
+}
+function syncGridInputs() {
+  const phase = $("grid_phase") ? $("grid_phase").value : "on_lines";
+  const elOn  = $("grid_step_on");
+  const elBt  = $("grid_step_between");
+  if (elOn) elOn.disabled = (phase !== "on_lines");
+  if (elBt) elBt.disabled = (phase !== "between_lines");
+}
+
 /* ----- read config from DOM ----- */
 function readConfig() {
   const num = (el, def) => (el && el.value !== "" ? Number(el.value) : def);
@@ -64,9 +78,12 @@ function readConfig() {
   const space_mode  = str($("space_mode"), "grid");
   const grid_phase  = str($("grid_phase"), "on_lines");
 
-  const grid_step_single = Number.isFinite(num($("grid_step"), NaN)) ? num($("grid_step"), 0.01) : undefined;
-  const grid_step_on      = Number.isFinite(num($("grid_step_on"), NaN)) ? num($("grid_step_on"), 0.01) : (grid_step_single ?? 0.01);
-  const grid_step_between = Number.isFinite(num($("grid_step_between"), NaN)) ? num($("grid_step_between"), 0.01) : (grid_step_single ?? 0.01);
+  // legacy "grid_step" (single) if present
+  const legacy_single = $("grid_step") ? Number($("grid_step").value) : NaN;
+
+  // clamp both steps (we keep both in the config always)
+  const gs_on  = clampStep($("grid_step_on")?.value ?? legacy_single, 0.01);
+  const gs_bt  = clampStep($("grid_step_between")?.value ?? legacy_single, 0.01);
 
   const n_points   = Math.trunc(num($("n_points"), 50000));
   const x_min = num($("x_min"), -2), x_max = num($("x_max"), 2);
@@ -81,6 +98,10 @@ function readConfig() {
   const fg    = str($("fg"), "#000000");
   const bg    = str($("bg"), "#FFFFFF");
 
+  // for legacy compatibility we provide grid_step = active step,
+  // but the worker uses only grid_step_on/between + grid_phase.
+  const active_step = grid_phase === "between_lines" ? gs_bt : gs_on;
+
   return {
     exactAlways,
     generation_mode: gen_mode,
@@ -89,9 +110,9 @@ function readConfig() {
       x_min, x_max, y_min, y_max,
       mode: space_mode,
       grid_phase,
-      grid_step: grid_step_on, // legacy
-      grid_step_on,
-      grid_step_between,
+      grid_step: active_step,   // legacy field (matches the active phase)
+      grid_step_on: gs_on,
+      grid_step_between: gs_bt,
       n_points
     },
     render: { projection, marker, spot_size, rotation_deg, alpha, dpi, fg, bg },
@@ -140,8 +161,6 @@ if (worker) {
       setStatus("running", `Rendering… ${ev.data.profile}`);
       return;
     }
-    if (type === "status") return;
-
     if (type === "bitmap") {
       if (!ctx) return;
       ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -174,7 +193,10 @@ const INPUT_IDS = [
 for (const id of INPUT_IDS) {
   const el = document.getElementById(id);
   const handler = el.tagName === "SELECT" ? "change" : "input";
-  el.addEventListener(handler, scheduleLive);
+  el.addEventListener(handler, (e) => {
+    if (id === "grid_phase") syncGridInputs();
+    scheduleLive();
+  });
   if (handler !== "change") el.addEventListener("change", () => scheduleRender("full"));
 }
 
@@ -239,9 +261,10 @@ if (upPreset) {
 
       setIf("space_mode", cfg.space?.mode);
       setIf("grid_phase", cfg.space?.grid_phase);
-      setIf("grid_step", cfg.space?.grid_step);
-      setIf("grid_step_on", cfg.space?.grid_step_on);
-      setIf("grid_step_between", cfg.space?.grid_step_between);
+      // prefer explicit dual steps, fall back to legacy
+      const legacy = cfg.space?.grid_step;
+      setIf("grid_step_on", cfg.space?.grid_step_on ?? legacy);
+      setIf("grid_step_between", cfg.space?.grid_step_between ?? legacy);
       setIf("x_min", cfg.space?.x_min);
       setIf("x_max", cfg.space?.x_max);
       setIf("y_min", cfg.space?.y_min);
@@ -259,6 +282,7 @@ if (upPreset) {
 
       if ($("exact_always")) $("exact_always").checked = !!cfg.exactAlways;
 
+      syncGridInputs();
       currentConfigJSON();
       scheduleRender("full");
     } catch (err) {
@@ -273,7 +297,8 @@ if (upPreset) {
 /* ----- robust initial render ----- */
 function kickoff() {
   try {
-    ensureStatusParts(); // ensure structure exists
+    ensureStatusParts();
+    syncGridInputs(); // ensure disabled state is correct on load
     currentConfigJSON();
     if (ctx && canvas) {
       ctx.fillStyle = "#fff";
@@ -292,9 +317,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   window.addEventListener("load", kickoff, { once: true });
 }
 
-// ---- Photopea export wiring  ----
-
-// Read sessionId from URL (if opened by the Photopea plugin)
+// ---- Photopea export wiring ----
 function getSessionIdFromURL() {
   try {
     const u = new URL(window.location.href);
@@ -303,7 +326,6 @@ function getSessionIdFromURL() {
 }
 const sessionId = getSessionIdFromURL();
 
-// Export button
 const btnExportPhotopea = document.getElementById("export_photopea");
 if (btnExportPhotopea) {
   btnExportPhotopea.addEventListener("click", async () => {
@@ -316,7 +338,6 @@ if (btnExportPhotopea) {
       const name = ((titleEl && titleEl.value) ? titleEl.value : "F1_vs_F2")
         .replace(/[^\w\-.]+/g, "_") + ".png";
 
-      // Create PNG as ArrayBuffer
       const ab = await new Promise((resolve, reject) => {
         if (!canvas) return reject(new Error("Canvas not found"));
         canvas.toBlob(async (blob) => {
@@ -326,10 +347,9 @@ if (btnExportPhotopea) {
         }, "image/png");
       });
 
-      // Post to plugin panel
       window.opener.postMessage({
         type: "f1vsf2-export",
-        sessionId: sessionId,         // required to match plugin tab
+        sessionId: sessionId,
         mime: "image/png",
         name,
         data: ab
@@ -339,4 +359,3 @@ if (btnExportPhotopea) {
     }
   });
 }
-
